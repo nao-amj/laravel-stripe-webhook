@@ -54,6 +54,63 @@ php artisan migrate
 php artisan serve
 ```
 
+## Webhookテスト方法
+
+ローカル開発環境でStripe Webhookをテストするには、以下の手順に従ってください：
+
+### 1. Stripe CLIのインストール
+
+[Stripe CLI](https://stripe.com/docs/stripe-cli)をインストールします：
+
+macOS (Homebrew):
+```bash
+brew install stripe/stripe-cli/stripe
+```
+
+Windows (Chocolatey):
+```bash
+choco install stripe-cli
+```
+
+### 2. Stripe CLIでログイン
+
+```bash
+stripe login
+```
+
+### 3. ローカルWebhookの転送を開始
+
+```bash
+stripe listen --forward-to http://localhost:8000/api/webhook/stripe
+```
+
+このコマンドを実行すると、Webhook Signing Secretが表示されます。これを`.env`ファイルの`STRIPE_WEBHOOK_SECRET`に設定します。
+
+### 4. イベントをトリガーしてテスト
+
+別のターミナルで以下のコマンドを実行して、特定のイベントをトリガーできます：
+
+```bash
+# checkout.session.completedイベントをトリガー
+stripe trigger checkout.session.completed
+
+# payment_intent.succeededイベントをトリガー
+stripe trigger payment_intent.succeeded
+```
+
+これにより、ローカル環境でWebhookの動作をテストできます。
+
+## ディレクトリ構造
+
+主な実装ファイル：
+
+- `app/Http/Controllers/StripeWebhookController.php` - Webhookハンドリング
+- `app/Http/Controllers/PaymentController.php` - 決済処理
+- `app/Models/Payment.php` - 決済情報モデル
+- `routes/api.php` - WebhookのAPIルート
+- `routes/web.php` - Web側のルート
+- `resources/views/payment/` - 決済関連のビュー
+
 ## ライセンス
 
 [MIT](https://opensource.org/licenses/MIT)
