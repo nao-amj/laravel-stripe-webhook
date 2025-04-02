@@ -5,7 +5,7 @@ LaravelとStripeを連携し、Webhookで決済完了イベントを受け取る
 ## 機能
 
 - Stripe決済連携
-- 決済完了Webhookのイベントハンドリング
+- 決済完了Webhookのイベントハンドリング（即時決済と非同期決済の両方に対応）
 - 決済履歴の保存と閲覧
 
 ## 必要条件
@@ -44,7 +44,10 @@ php artisan migrate
    ```
 3. StripeダッシュボードでWebhookエンドポイントを設定
    - エンドポイントURL: `https://your-domain.com/api/webhook/stripe`
-   - イベント: `checkout.session.completed`, `payment_intent.succeeded`など
+   - イベント: 
+     - `checkout.session.completed` (即時決済完了時)
+     - `checkout.session.async_payment_succeeded` (非同期決済完了時)
+     - `payment_intent.succeeded` (PaymentIntent完了時)
 
 ## 使用方法
 
@@ -53,6 +56,20 @@ php artisan migrate
 ```bash
 php artisan serve
 ```
+
+## サポートされる決済フロー
+
+### 即時決済（クレジットカードなど）
+1. ユーザーがカード情報を入力して決済を完了
+2. `checkout.session.completed`イベントが発火
+3. 決済情報がデータベースに保存される
+
+### 非同期決済（銀行振込・コンビニ決済など）
+1. ユーザーが決済方法を選択し、指示を受け取る
+2. `checkout.session.completed`イベントが発火（この時点ではpayment_status = 'unpaid'）
+3. 決済情報が「pending」状態でデータベースに保存される
+4. ユーザーが実際に支払いを完了すると、`checkout.session.async_payment_succeeded`イベントが発火
+5. データベース内の決済情報が「completed」状態に更新される
 
 ## Webhookテスト方法
 
@@ -91,10 +108,13 @@ stripe listen --forward-to http://localhost:8000/api/webhook/stripe
 別のターミナルで以下のコマンドを実行して、特定のイベントをトリガーできます：
 
 ```bash
-# checkout.session.completedイベントをトリガー
+# 即時決済完了イベントをトリガー
 stripe trigger checkout.session.completed
 
-# payment_intent.succeededイベントをトリガー
+# 非同期決済完了イベントをトリガー
+stripe trigger checkout.session.async_payment_succeeded
+
+# PaymentIntent完了イベントをトリガー
 stripe trigger payment_intent.succeeded
 ```
 
