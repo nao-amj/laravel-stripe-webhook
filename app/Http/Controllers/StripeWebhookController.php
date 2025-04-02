@@ -38,6 +38,10 @@ class StripeWebhookController extends Controller
                     $this->handleCheckoutSessionCompleted($event);
                     break;
                     
+                case 'checkout.session.async_payment_succeeded':
+                    $this->handleAsyncPaymentSucceeded($event);
+                    break;
+                
                 case 'payment_intent.succeeded':
                     $this->handlePaymentIntentSucceeded($event);
                     break;
@@ -79,17 +83,45 @@ class StripeWebhookController extends Controller
             'session_id' => $session->id,
             'customer' => $session->customer,
             'amount_total' => $session->amount_total,
+            'payment_status' => $session->payment_status,
         ]);
         
         // 支払い情報をデータベースに保存
+        // 非同期決済の場合はここでは保留状態として記録する
+        $status = $session->payment_status === 'paid' ? 'completed' : 'pending';
+        
         Payment::create([
             'stripe_id' => $session->id,
             'customer_id' => $session->customer,
             'amount' => $session->amount_total / 100, // セントから円に変換
-            'status' => 'completed',
+            'status' => $status,
             'payment_method' => $session->payment_method_types[0] ?? 'unknown',
             'metadata' => json_encode($session->metadata ?? []),
         ]);
+    }
+    
+    /**
+     * checkout.session.async_payment_succeededイベントを処理する
+     * 
+     * @param Event $event
+     * @return void
+     */
+    protected function handleAsyncPaymentSucceeded(Event $event)
+    {
+        $session = $event->data->object;
+        
+        Log::info('Async payment succeeded', [
+            'session_id' => $session->id,
+            'customer' => $session->customer,
+            'amount_total' => $session->amount_total,
+        ]);
+        
+        // 既存の支払い情報を完了状態に更新
+        Payment::where('stripe_id', $session->id)
+            ->update([
+                'status' => 'completed',
+                'updated_at' => now(),
+            ]);
     }
     
     /**
